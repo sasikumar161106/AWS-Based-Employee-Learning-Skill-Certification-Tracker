@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    @apply h-full antialiased font-sans bg-slate-50 text-slate-900;
+  }
+}
+
+@layer components {
+  /* Print configuration for PDF download simulations */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    .print-only {
+      display: block !important;
+    }
+    body {
+      background: white;
+      color: black;
+    }
+  }
+}
