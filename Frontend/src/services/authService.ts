@@ -1,10 +1,30 @@
 import { User } from '../types';
 import { mockUsers } from '../data/users';
+import { api, isApiEnabled } from '../utils/api';
 
 const delay = (ms = 500) => new Promise(resolve => setTimeout(resolve, ms));
 
 const USERS_KEY = 'lms_users';
 const CURRENT_USER_KEY = 'lms_current_user';
+
+interface ApiEmployee {
+  employee_id: string;
+  name: string;
+  email: string;
+  role?: 'employee' | 'hr';
+  department: string;
+  joined_date?: string;
+  active?: boolean;
+}
+
+const fromApiEmployee = (employee: ApiEmployee): User => ({
+  id: employee.employee_id,
+  name: employee.name,
+  email: employee.email,
+  role: employee.role || 'employee',
+  department: employee.department,
+  joinedDate: employee.joined_date
+});
 
 // Initialize users in localStorage if not present
 const getStoredUsers = (): User[] => {
@@ -83,12 +103,22 @@ export const authService = {
   },
 
   async getEmployees(): Promise<User[]> {
+    if (isApiEnabled()) {
+      const response = await api.get<ApiEmployee[]>('/employees');
+      return response.data.filter(employee => employee.active !== false).map(fromApiEmployee);
+    }
     await delay(300);
     const users = getStoredUsers();
     return users.filter(u => u.role === 'employee');
   },
 
   async getEmployeeById(employeeId: string): Promise<User> {
+    if (isApiEnabled()) {
+      const employees = await this.getEmployees();
+      const employee = employees.find(item => item.id === employeeId);
+      if (!employee) throw new Error('Employee not found');
+      return employee;
+    }
     await delay(300);
     const users = getStoredUsers();
     const user = users.find(u => u.id === employeeId);
