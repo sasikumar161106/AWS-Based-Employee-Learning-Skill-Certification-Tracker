@@ -4,11 +4,31 @@ import { mockCertificates } from '../data/certificates';
 import { mockActivityLogs } from '../data/dashboard';
 import { authService } from './authService';
 import { courseService } from './courseService';
+import { api, isApiEnabled } from '../utils/api';
 
 const delay = (ms = 500) => new Promise(resolve => setTimeout(resolve, ms));
 const ASSIGNMENTS_KEY = 'lms_assignments';
 const CERTIFICATES_KEY = 'lms_certificates';
 const LOGS_KEY = 'lms_activity_logs';
+
+interface ApiAssignment {
+  employee_id: string;
+  course_id: string;
+  assigned_date: string;
+  due_date: string;
+  status: Assignment['status'];
+}
+
+const fromApiAssignment = (assignment: ApiAssignment): Assignment => ({
+  id: `${assignment.employee_id}:${assignment.course_id}`,
+  employeeId: assignment.employee_id,
+  courseId: assignment.course_id,
+  assignedDate: assignment.assigned_date,
+  dueDate: assignment.due_date,
+  progress: 0,
+  status: assignment.status,
+  attemptsRemaining: 3
+});
 
 export const getStoredAssignments = (): Assignment[] => {
   const asgs = localStorage.getItem(ASSIGNMENTS_KEY);
@@ -44,6 +64,10 @@ export const assignmentService = {
   },
 
   async getAssignmentsByEmployee(employeeId: string): Promise<Assignment[]> {
+    if (isApiEnabled()) {
+      const response = await api.get<ApiAssignment[]>(`/employees/${employeeId}/courses`);
+      return response.data.map(fromApiAssignment);
+    }
     await delay(300);
     const asgs = getStoredAssignments();
     return asgs.filter(a => a.employeeId === employeeId);
@@ -56,6 +80,13 @@ export const assignmentService = {
   },
 
   async assignCourse(courseId: string, employeeIds: string[], dueDate: string): Promise<void> {
+    if (isApiEnabled()) {
+      await Promise.all(employeeIds.map((employeeId) => api.post(`/courses/${courseId}/assign`, {
+        employee_id: employeeId,
+        due_date: dueDate
+      })));
+      return;
+    }
     await delay();
     const asgs = getStoredAssignments();
     const courses = await courseService.getCourses();
