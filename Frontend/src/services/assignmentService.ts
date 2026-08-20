@@ -59,6 +59,10 @@ export const getStoredLogs = (): ActivityLog[] => {
 
 export const assignmentService = {
   async getAssignments(): Promise<Assignment[]> {
+    if (isApiEnabled()) {
+      const response = await api.get<ApiAssignment[]>('/assignments');
+      return response.data.map(fromApiAssignment);
+    }
     await delay();
     return getStoredAssignments();
   },

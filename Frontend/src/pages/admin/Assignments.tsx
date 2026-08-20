@@ -9,16 +9,23 @@ import { Select } from '../../components/ui/Select';
 import { Badge } from '../../components/ui/Badge';
 import { useToast } from '../../context/ToastContext';
 import { LoadingState } from '../../components/ui/LoadingState';
-import { UserCheck, Search, Filter, Calendar, Users, ChevronRight, CheckSquare, Square } from 'lucide-react';
-import { User, Course } from '../../types';
+import { UserCheck, Search, Calendar, Users, CheckSquare, Square } from 'lucide-react';
+import { User, Assignment } from '../../types';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/Table';
+import { formatDate } from '../../utils/helpers';
 
 export const AdminAssignments: React.FC = () => {
   const { courses, loading: coursesLoading } = useCourses();
-  const { assignCourse, loading: assignLoading } = useAssignments();
+  const { assignments, assignCourse, fetchAssignments, loading: assignmentsLoading } = useAssignments();
+  const assignLoading = assignmentsLoading;
   const { showToast } = useToast();
 
   const [employees, setEmployees] = useState<User[]>([]);
   const [employeesLoading, setEmployeesLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAssignments();
+  }, [fetchAssignments]);
 
   // Form selections
   const [selectedCourseId, setSelectedCourseId] = useState('');
@@ -121,7 +128,7 @@ export const AdminAssignments: React.FC = () => {
     }
   };
 
-  if (coursesLoading || employeesLoading) {
+  if (coursesLoading || employeesLoading || assignmentsLoading) {
     return <LoadingState type="table" rows={4} />;
   }
 
@@ -314,6 +321,59 @@ export const AdminAssignments: React.FC = () => {
           )}
         </div>
 
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="font-extrabold text-base text-slate-900 leading-none">
+            Current Course Enrollments
+          </h3>
+          <p className="text-sm text-slate-500 mt-1 font-medium">
+            Enrollment records returned by the backend.
+          </p>
+        </div>
+
+        {assignments.length === 0 ? (
+          <div className="text-center py-12 border border-dashed border-slate-300 bg-white rounded-xl">
+            <Users className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+            <h3 className="text-sm font-bold text-slate-700">No course enrollments found.</h3>
+          </div>
+        ) : (
+          <Table className="text-xs">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee ID</TableHead>
+                <TableHead>Employee</TableHead>
+                <TableHead>Course ID</TableHead>
+                <TableHead>Course</TableHead>
+                <TableHead>Assigned Date</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {assignments.map((assignment: Assignment) => {
+                const employee = employees.find(item => item.id === assignment.employeeId);
+                const course = courses.find(item => item.id === assignment.courseId);
+                return (
+                  <TableRow key={assignment.id}>
+                    <TableCell className="font-mono font-semibold text-blue-700">{assignment.employeeId}</TableCell>
+                    <TableCell className="font-bold text-slate-900">{employee?.name || 'Unknown employee'}</TableCell>
+                    <TableCell className="font-mono text-slate-600">{assignment.courseId}</TableCell>
+                    <TableCell className="font-medium text-slate-800">{course?.title || 'Unknown course'}</TableCell>
+                    <TableCell>{formatDate(assignment.assignedDate)}</TableCell>
+                    <TableCell>{formatDate(assignment.dueDate)}</TableCell>
+                    <TableCell>
+                      <Badge variant={assignment.status === 'completed' ? 'success' : assignment.status === 'overdue' ? 'danger' : 'neutral'}>
+                        {assignment.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
       </div>
     </div>
   );
