@@ -1,0 +1,147 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Employee Learning & Skill Certification Tracker - Quiz & Certification Subsystem (Member 3)
+
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+  Function:
+    Timeout: 15
+    Runtime: nodejs20.x
+    MemorySize: 512
+    Environment:
+      Variables:
+        COMPLETIONS_TABLE: !Ref CompletionsTable
+        QUIZZES_TABLE: !Ref QuizzesTable
+        CERTIFICATES_TABLE: !Ref CertificatesTable
+        CERTIFICATE_BUCKET: !Ref CertificatesBucket
+
+Resources:
+  # --- DYNAMODB TABLES ---
+  QuizzesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: course_id
+          AttributeType: S
+        - AttributeName: question_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: course_id
+          KeyType: HASH
+        - AttributeName: question_id
+          KeyType: RANGE
+
+  CompletionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: employee_id
+          AttributeType: S
+        - AttributeName: course_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: employee_id
+          KeyType: HASH
+        - AttributeName: course_id
+          KeyType: RANGE
+
+  CertificatesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: certificate_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: certificate_id
+          KeyType: HASH
+
+  # --- S3 BUCKET ---
+  CertificatesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # --- LAMBDA FUNCTIONS ---
+  QuizManagementFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/quiz-management/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref QuizzesTable
+      Events:
+        CreateQuiz:
+          Type: Api
+          Properties:
+            Path: /courses/{course_id}/quiz
+            Method: post
+
+  QuizGradingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/quiz-grading/
+      Handler: app.handler
+      Environment:
+        Variables:
+          CERTIFICATE_GENERATION_FUNCTION_NAME: !Ref CertificateGenerationFunction
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CompletionsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref QuizzesTable
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CertificateGenerationFunction
+      Events:
+        SubmitQuiz:
+          Type: Api
+          Properties:
+            Path: /courses/{course_id}/quiz/submit
+            Method: post
+
+  CertificateGenerationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/certificate-generation/
+      Handler: app.handler
+      Environment:
+        Variables:
+          SENDER_EMAIL: "anonymous84625490@gmail.com" # TODO: Verify this identity in SES
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CertificatesTable
+        - S3CrudPolicy:
+            BucketName: !Ref CertificatesBucket
+        - SESCrudPolicy:
+            IdentityName: "*"
+
+  VerificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/verification/
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref CertificatesTable
+      Events:
+        VerifyCert:
+          Type: Api
+          Properties:
+            Path: /verify/{cert_id}
+            Method: get
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

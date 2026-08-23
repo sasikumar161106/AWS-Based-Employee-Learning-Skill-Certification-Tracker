@@ -1,0 +1,13 @@
+{
+  "name": "certificate-generation",
+  "version": "1.0.0",
+  "main": "app.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/s3-request-presigner": "^3.400.0",
+    "@aws-sdk/client-dynamodb": "^3.400.0",
+    "@aws-sdk/lib-dynamodb": "^3.400.0",
+    "@aws-sdk/client-ses": "^3.400.0",
+    "pdf-lib": "^1.17.1"
+  }
+}
