@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Quiz } from '../types';
 import { quizService } from '../services/quizService';
 import { assignmentService } from '../services/assignmentService';
+import { isApiEnabled } from '../utils/api';
 import { useToast } from '../context/ToastContext';
 
 export const useQuiz = () => {
@@ -39,7 +40,9 @@ export const useQuiz = () => {
       const result = await quizService.submitQuiz(courseId, answers);
       
       // 2. Propagate to assignments and mint certificates if passed
-      await assignmentService.submitQuizResult(employeeId, courseId, result.score, result.passed);
+      if (!isApiEnabled()) {
+        await assignmentService.submitQuizResult(employeeId, courseId, result.score, result.passed);
+      }
       
       if (result.passed) {
         showToast('Congratulations! You passed the assessment!', 'success');

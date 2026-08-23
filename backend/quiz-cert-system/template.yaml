@@ -87,6 +87,11 @@ Resources:
           Properties:
             Path: /courses/{course_id}/quiz
             Method: post
+        GetQuiz:
+          Type: Api
+          Properties:
+            Path: /courses/{course_id}/quiz
+            Method: get
 
   QuizGradingFunction:
     Type: AWS::Serverless::Function

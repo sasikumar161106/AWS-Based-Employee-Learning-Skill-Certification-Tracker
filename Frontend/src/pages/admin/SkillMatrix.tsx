@@ -150,7 +150,7 @@ export const AdminSkillMatrix: React.FC = () => {
           onChange={(e) => setDeptFilter(e.target.value)}
           options={[
             { value: 'all', label: 'All Departments' },
-            ...departments.filter(d => d !== 'all').map(d => ({ value: d, label: d }))
+            ...departments.filter(d => d !== 'all').map(d => ({ value: String(d), label: String(d) }))
           ]}
           className="w-full sm:w-48 h-[34px] py-0.5 text-xs shadow-xs"
         />

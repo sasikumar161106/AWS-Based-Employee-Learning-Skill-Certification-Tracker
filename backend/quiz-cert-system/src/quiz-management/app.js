@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 const crypto = require('crypto');
 
 const client = new DynamoDBClient({});
@@ -10,6 +10,22 @@ exports.handler = async (event) => {
 
     try {
         const courseId = event.pathParameters.course_id;
+
+        if (event.httpMethod === 'GET') {
+            const response = await docClient.send(new QueryCommand({
+                TableName: process.env.QUIZZES_TABLE,
+                KeyConditionExpression: 'course_id = :courseId',
+                ExpressionAttributeValues: { ':courseId': courseId },
+                ProjectionExpression: 'question_id, question_text, options'
+            }));
+
+            return {
+                statusCode: 200,
+                headers: { 'Access-Control-Allow-Origin': '*' },
+                body: JSON.stringify({ course_id: courseId, questions: response.Items || [] })
+            };
+        }
+
         const body = JSON.parse(event.body);
 
         if (!body.questions || !Array.isArray(body.questions)) {
