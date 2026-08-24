@@ -37,17 +37,6 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleQuickLogin = (role: 'employee' | 'hr') => {
-    if (role === 'employee') {
-      setEmail('employee@example.com');
-      setPassword('employee123');
-    } else {
-      setEmail('hr@example.com');
-      setPassword('admin123');
-    }
-    setValidationError('');
-  };
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
       <div className="max-w-md w-full space-y-6">
@@ -108,30 +97,6 @@ export const Login: React.FC = () => {
               </Button>
             </form>
 
-            {/* Quick Demo Logins */}
-            <div className="pt-6 border-t border-slate-100 space-y-3">
-              <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">
-                Demo Accounts Quick-Fill
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('employee')}
-                  className="px-3.5 py-2.5 rounded-lg border border-slate-200 hover:border-brand-300 text-xs bg-slate-50/50 hover:bg-brand-50/10 text-left transition-all"
-                >
-                  <span className="font-bold text-slate-800 block">Demo Employee</span>
-                  <span className="text-slate-450 block mt-0.5 font-medium truncate">employee@example.com</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('hr')}
-                  className="px-3.5 py-2.5 rounded-lg border border-slate-200 hover:border-brand-300 text-xs bg-slate-50/50 hover:bg-brand-50/10 text-left transition-all"
-                >
-                  <span className="font-bold text-slate-800 block">Demo HR Admin</span>
-                  <span className="text-slate-450 block mt-0.5 font-medium truncate">hr@example.com</span>
-                </button>
-              </div>
-            </div>
           </CardContent>
         </Card>
 

@@ -1,11 +1,46 @@
 import { User } from '../types';
 import { mockUsers } from '../data/users';
 import { api, isApiEnabled } from '../utils/api';
+import { cognito } from '../utils/cognito';
+import { CognitoUserAttribute, CognitoUserSession } from 'amazon-cognito-identity-js';
 
 const delay = (ms = 500) => new Promise(resolve => setTimeout(resolve, ms));
 
 const USERS_KEY = 'lms_users';
 const CURRENT_USER_KEY = 'lms_current_user';
+
+const getClaim = (claims: Record<string, unknown>, ...names: string[]) => {
+  for (const name of names) {
+    const value = claims[name];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return undefined;
+};
+
+const fromCognitoSession = async (email: string, session: CognitoUserSession | null): Promise<User> => {
+  if (!session) throw new Error('Your Cognito session has expired. Please sign in again.');
+  const claims = session.getIdToken().decodePayload() as Record<string, unknown>;
+  let attributes: CognitoUserAttribute[] = [];
+  try {
+    attributes = await cognito.getAttributes(email);
+  } catch {
+  }
+  const attributeMap = Object.fromEntries(attributes.map(attribute => [attribute.getName(), attribute.getValue()]));
+  const roleValue = getClaim(claims, 'custom:role', 'role') || attributeMap['custom:role'] || '';
+  const groups = Array.isArray(claims['cognito:groups']) ? claims['cognito:groups'] as string[] : [];
+  const role = /^(hr|admin|administrator|hradmin)$/i.test(roleValue) || groups.some(group => /^(hr|admin|administrator|administrators|hradmin)$/i.test(group))
+    ? 'hr'
+    : 'employee';
+  const user: User = {
+    id: getClaim(claims, 'custom:employee_id', 'employee_id', 'sub') || attributeMap['custom:employee_id'] || email,
+    name: getClaim(claims, 'name', 'preferred_username') || attributeMap.name || email,
+    email: getClaim(claims, 'email') || attributeMap.email || email,
+    role,
+    department: getClaim(claims, 'custom:department', 'department') || attributeMap['custom:department'] || 'General'
+  };
+  localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  return user;
+};
 
 interface ApiEmployee {
   employee_id: string;
@@ -38,6 +73,15 @@ const getStoredUsers = (): User[] => {
 
 export const authService = {
   async login(email: string, password: string): Promise<User> {
+    if (isApiEnabled()) {
+      try {
+        const session = await cognito.authenticate(email.trim(), password);
+        return fromCognitoSession(email.trim(), session);
+      } catch (error: any) {
+        throw new Error(error?.message || 'Unable to sign in with Cognito.');
+      }
+    }
+
     await delay();
     const users = getStoredUsers();
     
@@ -69,11 +113,22 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
-    await delay(300);
+    if (isApiEnabled()) cognito.signOut();
     localStorage.removeItem(CURRENT_USER_KEY);
   },
 
   async getCurrentUser(): Promise<User | null> {
+    if (isApiEnabled()) {
+      const session = await cognito.getSession();
+      if (!session) {
+        localStorage.removeItem(CURRENT_USER_KEY);
+        return null;
+      }
+      const claims = session.getIdToken().decodePayload() as Record<string, unknown>;
+      const email = getClaim(claims, 'email') || '';
+      return fromCognitoSession(email, session);
+    }
+
     const userJson = localStorage.getItem(CURRENT_USER_KEY);
     if (!userJson) return null;
     return JSON.parse(userJson);
