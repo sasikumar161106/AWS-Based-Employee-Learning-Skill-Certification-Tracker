@@ -1,0 +1,211 @@
+name: P2 Internal LMS CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+
+  # Existing P2 deployment artifact bucket
+  SAM_ARTIFACT_BUCKET: employee-lms-deploy-artifacts-177001538901
+
+  # Change these only if your actual frontend resources have different names
+  FRONTEND_BUCKET: ${{ vars.LMS_FRONTEND_BUCKET }}
+  CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.LMS_CLOUDFRONT_DISTRIBUTION_ID }}
+
+jobs:
+
+  # ==========================================================
+  # BUILD
+  # ==========================================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- Frontend ----------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: Frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: Frontend
+        run: npm run build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-frontend-dist
+          path: Frontend/dist
+          if-no-files-found: error
+
+      # ---------- SAM backend ----------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Validate SAM template
+        run: |
+          sam validate \
+            --template-file backend/quiz-cert-system/template.yaml
+
+      - name: Build SAM application
+        run: |
+          sam build \
+            --template-file backend/quiz-cert-system/template.yaml
+
+      - name: Upload SAM build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-sam-build
+          path: .aws-sam
+          if-no-files-found: error
+
+
+  # ==========================================================
+  # TEST
+  # ==========================================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- Frontend validation ----------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: Frontend
+        run: npm ci
+
+      - name: Verify frontend build
+        working-directory: Frontend
+        run: npm run build
+
+      # ---------- SAM validation ----------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Validate SAM template
+        run: |
+          sam validate \
+            --template-file backend/quiz-cert-system/template.yaml
+
+                # ---------- Infrastructure template validation ----------
+      - name: Install cfn-lint
+        run: |
+          python -m pip install --upgrade pip
+          pip install cfn-lint
+
+      - name: Validate infrastructure CloudFormation template
+        run: |
+          cfn-lint infrastructure/template.yaml
+  # ==========================================================
+  # DEPLOY
+  # ==========================================================
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build, test]
+
+    # Don't deploy pull requests
+    if: github.event_name != 'pull_request'
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- AWS OIDC ----------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      # ---------- SAM ----------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build SAM application
+        run: |
+          sam build \
+            --template-file backend/quiz-cert-system/template.yaml
+
+      - name: Deploy SAM application
+        run: |
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
+            --stack-name quiz-cert-system
+            --region "$AWS_REGION" \
+            --s3-bucket employee-lms-deploy-artifacts-177001538901 \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+
+      # ---------- Frontend ----------
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: p2-frontend-dist
+          path: Frontend/dist
+
+      - name: Deploy frontend to S3
+        if: env.FRONTEND_BUCKET != ''
+        run: |
+          aws s3 sync \
+            Frontend/dist \
+            "s3://$FRONTEND_BUCKET" \
+            --delete
+
+      - name: Invalidate CloudFront
+        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths '/*'
