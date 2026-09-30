@@ -18,7 +18,7 @@ env:
   # Existing P2 deployment artifact bucket
   SAM_ARTIFACT_BUCKET: employee-lms-deploy-artifacts-177001538901
 
-  # Set these only if your actual frontend resources have these values
+  # Configure these as GitHub repository variables if frontend deployment is required
   FRONTEND_BUCKET: ${{ vars.LMS_FRONTEND_BUCKET }}
   CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.LMS_CLOUDFRONT_DISTRIBUTION_ID }}
 
@@ -33,7 +33,6 @@ jobs:
 
     steps:
 
-      # ---------- Checkout ----------
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -92,7 +91,6 @@ jobs:
 
     steps:
 
-      # ---------- Checkout ----------
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -151,7 +149,6 @@ jobs:
 
     steps:
 
-      # ---------- Checkout ----------
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -159,7 +156,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::177001538901:role/GitHubActions-P2-LMS
+          role-session-name: GitHubActions-P2-LMS
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS identity
